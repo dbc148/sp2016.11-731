@@ -1,7 +1,7 @@
 ---
 name:
-   first: Daniel
-   last: Clothiaux
-email: dclothia@andrew.cmu.edu
-leaderboard: Austin Matthews
-languages: [eng,jpn, cmn]
+   first: Qinlan
+   last: Shen
+email: qinlans@cs.cmu.edu
+leaderboard: Austin Meowtthews
+languages: [eng,wuu,jpn,cmn,ase]
