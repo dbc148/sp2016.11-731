@@ -495,9 +495,9 @@ int main(int argc, char** argv) {
       ++lines;
     }
 
-    sgd->status();
-    cerr << " E = " << (loss / num_instances)
-         << " ppl = " << exp(loss / num_instances) << "\n";
+    //sgd->status();
+    //cerr << " E = " << (loss / num_instances)
+    //     << " ppl = " << exp(loss / num_instances) << "\n";
     report++;
 
     if (report % dev_every_i_reports == 0) {
