@@ -43,6 +43,7 @@ class Instance {
     Sentence hyp2;
     Sentence ref;
     int correct;
+    int line;
 };
 
 
@@ -233,6 +234,7 @@ vector<Instance> setBMC(string bleu_file, string meteor_file, string correct, ve
         //this will add the semantic expression/vec/whatever
         getline(iss, word, '\n');
         instances[counter].correct = stoi(word);
+        instances[counter].line = counter;
         counter++;
       }
     }
@@ -300,80 +302,119 @@ vector<Instance> setSyn(string shyp1, string shyp2, string sref, vector<Instance
   return instances;
 }
 
+struct EvaluationGraph {
+  Parameters* ie;
+  Parameters* W_12;
+  Parameters* b_12;
+  Parameters* W_1r;
+  Parameters* b_1r;
+  Parameters* W_2r;
+  Parameters* b_2r;
+  Parameters* V_;
+  Parameters* b_;
 
-Expression buildComputationGraph(Instance instance,
- ComputationGraph& cg, Model* m) {
-  Expression input_embed = parameter(cg, m->add_parameters({HIDDEN_DIM, INPUT_DIM}));
-  Expression W12 = parameter(cg, m->add_parameters({PAIRWISE_DIM, HIDDEN_DIM * 2}));
-  Expression b12 = parameter(cg, m->add_parameters({PAIRWISE_DIM}));
-  Expression W1r = parameter(cg, m->add_parameters({PAIRWISE_DIM, HIDDEN_DIM * 2}));
-  Expression b1r = parameter(cg, m->add_parameters({PAIRWISE_DIM}));
-  Expression W2r = parameter(cg, m->add_parameters({PAIRWISE_DIM, HIDDEN_DIM * 2}));
-  Expression b2r = parameter(cg, m->add_parameters({PAIRWISE_DIM}));
-  Expression V = parameter(cg, m->add_parameters({1, PAIRWISE_DIM * 3 + 4}));
-  Expression b = parameter(cg, m->add_parameters({1}));
+  explicit EvaluationGraph(Model* m) :
+    ie(m->add_parameters({HIDDEN_DIM, INPUT_DIM})),
+    W_12(m->add_parameters({PAIRWISE_DIM, HIDDEN_DIM * 2})),
+    b_12(m->add_parameters({PAIRWISE_DIM})),
+    W_1r(m->add_parameters({PAIRWISE_DIM, HIDDEN_DIM * 2})),
+    b_1r(m->add_parameters({PAIRWISE_DIM})),
+    W_2r(m->add_parameters({PAIRWISE_DIM, HIDDEN_DIM * 2})),
+    b_2r(m->add_parameters({PAIRWISE_DIM})),
+    V_(m->add_parameters({1, PAIRWISE_DIM * 3 + 4})),
+    b_(m->add_parameters({1}))
+    {
 
-  // Create embedding from syntax and semantic vector
-  // {SENTENCE_DIM, 1} result
-  Expression hyp1syn = input(cg, {SENTENCE_DIM, 1}, instance.hyp1.syn);
-  Expression hyp2syn = input(cg, {SENTENCE_DIM, 1}, instance.hyp2.syn);
-  Expression refsyn = input(cg, {SENTENCE_DIM, 1}, instance.ref.syn);
-
-  vector<Expression> hyp1sem_vectors;
-  vector<Expression> hyp2sem_vectors;
-  vector<Expression> refsem_vectors;
-  for (int i = 0; i < instance.hyp1.sem.size(); ++i) {
-    if (instance.hyp1.sem[i].size() != 0) {
-      hyp1sem_vectors.push_back(input(cg, {GLOVE_DIM, 1}, instance.hyp1.sem[i]));
     }
-  }
-  for (int i = 0; i < instance.hyp2.sem.size(); ++i) {
-    if (instance.hyp2.sem[i].size() != 0) {
-      hyp2sem_vectors.push_back(input(cg, {GLOVE_DIM, 1}, instance.hyp2.sem[i]));
+
+
+  Expression buildComputationGraph(Instance instance,
+   ComputationGraph& cg, Model* m) {
+    
+    Expression input_embed = parameter(cg, ie);
+    Expression W12 = parameter(cg, W_12);
+    Expression b12 = parameter(cg, b_12);
+    Expression W1r = parameter(cg, W_1r);
+    Expression b1r = parameter(cg, b_1r);
+    Expression W2r = parameter(cg, W_2r);
+    Expression b2r = parameter(cg, b_2r);
+    Expression V = parameter(cg, V_);
+    Expression b = parameter(cg, b_);
+
+    // Create embedding from syntax and semantic vector
+    // {SENTENCE_DIM, 1} result
+    Expression hyp1syn = input(cg, {SENTENCE_DIM, 1}, instance.hyp1.syn);
+    Expression hyp2syn = input(cg, {SENTENCE_DIM, 1}, instance.hyp2.syn);
+    Expression refsyn = input(cg, {SENTENCE_DIM, 1}, instance.ref.syn);
+
+    /*
+    vector<float> hyp1_in = instance.hyp1.syn;
+    vector<float> hyp2_in = instance.hyp2.syn;
+    vector<float> ref_in = instance.ref.syn;
+  */
+
+    vector<Expression> hyp1sem_vectors;
+    vector<Expression> hyp2sem_vectors;
+    vector<Expression> refsem_vectors;
+    for (int i = 0; i < instance.hyp1.sem.size(); ++i) {
+      if (instance.hyp1.sem[i].size() != 0) {
+        hyp1sem_vectors.push_back(input(cg, {GLOVE_DIM, 1}, instance.hyp1.sem[i]));
+      }
     }
-  }
-  for (int i = 0; i < instance.ref.sem.size(); ++i) {
-    if (instance.ref.sem[i].size() != 0) {
-      refsem_vectors.push_back(input(cg, {GLOVE_DIM, 1}, instance.ref.sem[i]));
+    for (int i = 0; i < instance.hyp2.sem.size(); ++i) {
+      if (instance.hyp2.sem[i].size() != 0) {
+        hyp2sem_vectors.push_back(input(cg, {GLOVE_DIM, 1}, instance.hyp2.sem[i]));
+      }
     }
+    for (int i = 0; i < instance.ref.sem.size(); ++i) {
+      if (instance.ref.sem[i].size() != 0) {
+        refsem_vectors.push_back(input(cg, {GLOVE_DIM, 1}, instance.ref.sem[i]));
+      }
+    }
+    Expression hyp1sem_matrix = concatenate_cols(hyp1sem_vectors);
+    Expression hyp2sem_matrix = concatenate_cols(hyp2sem_vectors);
+    Expression refsem_matrix = concatenate_cols(refsem_vectors);
+
+    // {GLOVE_DIM * GLOVE_DIM, 1} result
+    Expression hyp1sem = reshape(hyp1sem_matrix * transpose(hyp1sem_matrix), {GLOVE_DIM * GLOVE_DIM, 1});
+    Expression hyp2sem = reshape(hyp2sem_matrix * transpose(hyp2sem_matrix), {GLOVE_DIM * GLOVE_DIM, 1});
+    Expression refsem = reshape(refsem_matrix * transpose(refsem_matrix), {GLOVE_DIM * GLOVE_DIM, 1});
+
+    // {HIDDEN_DIM, 1} result
+    Expression x1 = input_embed * concatenate({hyp1syn, hyp1sem});
+    Expression x2 = input_embed * concatenate({hyp2syn, hyp2sem});
+    Expression xref = input_embed * concatenate({refsyn, refsem});
+
+    // Create pairwise vectors
+    // {PAIRWISE_DIM, 1} result
+    Expression h12 = tanh(W12 * concatenate({x1, x2}) + b12);
+    Expression h1r = tanh(W1r * concatenate({x1, xref}) + b1r);
+    Expression h2r = tanh(W2r * concatenate({x2, xref}) + b2r);
+
+    // Combination of evaluation input
+    // {PAIRWISE_DIM * 3 + 4, 1} result
+    Expression BLEU1 = input(cg, instance.hyp1.BLEU);
+    Expression BLEU2 = input(cg, instance.hyp2.BLEU);
+    Expression meteor1 = input(cg, instance.hyp1.meteor);
+    Expression meteor2 = input(cg, instance.hyp2.meteor);
+    Expression combined = concatenate({h12, h1r, h2r, BLEU1, BLEU2, meteor1, meteor2});
+
+    Expression y_pred = logistic(V * combined + b);
+
+    return y_pred;
   }
-  Expression hyp1sem_matrix = concatenate_cols(hyp1sem_vectors);
-  Expression hyp2sem_matrix = concatenate_cols(hyp2sem_vectors);
-  Expression refsem_matrix = concatenate_cols(refsem_vectors);
 
-  // {GLOVE_DIM * GLOVE_DIM, 1} result
-  Expression hyp1sem = reshape(hyp1sem_matrix * transpose(hyp1sem_matrix), {GLOVE_DIM * GLOVE_DIM, 1});
-  Expression hyp2sem = reshape(hyp2sem_matrix * transpose(hyp2sem_matrix), {GLOVE_DIM * GLOVE_DIM, 1});
-  Expression refsem = reshape(refsem_matrix * transpose(refsem_matrix), {GLOVE_DIM * GLOVE_DIM, 1});
 
-  // {HIDDEN_DIM, 1} result
-  Expression x1 = input_embed * concatenate({hyp1syn, hyp1sem});
-  Expression x2 = input_embed * concatenate({hyp2syn, hyp2sem});
-  Expression xref = input_embed * concatenate({refsyn, refsem});
+};
 
-  // Create pairwise vectors
-  // {PAIRWISE_DIM, 1} result
-  Expression h12 = tanh(W12 * concatenate({x1, x2}) + b12);
-  Expression h1r = tanh(W1r * concatenate({x1, xref}) + b1r);
-  Expression h2r = tanh(W2r * concatenate({x2, xref}) + b2r);
+  
+  
 
-  // Combination of evaluation input
-  // {PAIRWISE_DIM * 3 + 4, 1} result
-  Expression BLEU1 = input(cg, instance.hyp1.BLEU);
-  Expression BLEU2 = input(cg, instance.hyp2.BLEU);
-  Expression meteor1 = input(cg, instance.hyp1.meteor);
-  Expression meteor2 = input(cg, instance.hyp2.meteor);
-  Expression combined = concatenate({h12, h1r, h2r, BLEU1, BLEU2, meteor1, meteor2});
 
-  Expression y_pred = logistic(V * combined + b);
-  Expression y = input(cg, instance.correct);
-  Expression loss = binary_log_loss(y_pred, y);
 
-  return y_pred;
-}
 
 int main(int argc, char** argv) {
-  cnn::Initialize(argc, argv);
+  cnn::Initialize(argc, argv, 585502743);
   string hyp1 = "../data/hyp1lower.txt";
   string hyp2 = "../data/hyp2lower.txt";
   string ref = "../data/reflower.txt";
@@ -402,6 +443,7 @@ int main(int argc, char** argv) {
 
   Trainer* sgd = nullptr;
   sgd = new SimpleSGDTrainer(&model);
+  EvaluationGraph evaluator(&model);
 
   unordered_map<string, vector<float>> word2gl = getAllWords(hyp1, hyp2, ref, gloveFile);
   vector<Instance> instances = setVector(hyp1, hyp2, ref, word2gl);
@@ -423,7 +465,7 @@ int main(int argc, char** argv) {
   bool first = true;
   unsigned report = 0;
   unsigned report_every_i = 20;
-  unsigned dev_every_i_reports = 1;
+  unsigned dev_every_i_reports = 20;
   unsigned lines = 0;
   unsigned si = training_order.size();
   double best = 9e+99;
@@ -441,7 +483,11 @@ int main(int argc, char** argv) {
       ComputationGraph cg;
       Instance training_instance = instances[order[training_order[si]]];
       ++si;
-      Expression y_pred = buildComputationGraph(training_instance, cg, &model);      
+
+      Expression y_pred = evaluator.buildComputationGraph(training_instance, cg, &model);   
+      Expression y = input(cg, training_instance.correct);
+      Expression losss = squared_distance(y_pred, y);
+   
       loss += as_scalar(cg.incremental_forward());
       cg.backward();
       sgd->update();
@@ -460,7 +506,10 @@ int main(int argc, char** argv) {
       for (int i = 0; i < dev.size(); ++i) {
         ComputationGraph dcg;
         Instance dev_instance = instances[dev[i]];
-        Expression dev_y_pred = buildComputationGraph(dev_instance, dcg, &model);
+        Expression dev_y_pred = evaluator.buildComputationGraph(dev_instance, dcg, &model);
+        Expression y = input(dcg, dev_instance.correct);
+        Expression losss = squared_distance(dev_y_pred, y);
+
         dloss += as_scalar(dcg.incremental_forward());
         dnum_instances += 1;
       }
