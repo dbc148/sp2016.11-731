@@ -435,25 +435,6 @@ int main(int argc, char** argv) {
   string shyp2 = "../data/hyp2vectors.txt";
   string sref = "../data/refvectors.txt";
 
-  bool load_model = false;
-  string lmodel = "in_model";
-  string smodel = "model";
-
-  Model model;
-
-  if (load_model) {
-    string fname = lmodel;
-    cerr << "Reading parameters from " << fname << "...\n";
-    ifstream in(fname);
-    assert(in);
-    boost::archive::text_iarchive ia(in);
-    ia >> model;
-  }
-
-  Trainer* sgd = nullptr;
-  sgd = new SimpleSGDTrainer(&model);
-  EvaluationGraph evaluator(&model);
-
   unordered_map<string, vector<float>> word2gl =
       getAllWords(hyp1, hyp2, ref, gloveFile);
   vector<Instance> instances = setVector(hyp1, hyp2, ref, word2gl);
@@ -462,8 +443,27 @@ int main(int argc, char** argv) {
 
   // Shuffles instances with gold data
   vector<unsigned> order(25208);
-  for (int i = 0; i < 16; ++i) {
+  for (int k = 0; k < 16; ++k) {
     
+    bool load_model = false;
+    string lmodel = "in_model";
+    string smodel = "model";
+
+    Model model;
+
+    if (load_model) {
+      string fname = lmodel;
+      cerr << "Reading parameters from " << fname << "...\n";
+      ifstream in(fname);
+      assert(in);
+      boost::archive::text_iarchive ia(in);
+      ia >> model;
+    }
+
+    Trainer* sgd = nullptr;
+    sgd = new SimpleSGDTrainer(&model);
+    EvaluationGraph evaluator(&model);
+
     for (int i = 0; i < order.size(); ++i) order[i] = i;
     shuffle(order.begin(), order.end(), *rndeng);
 
@@ -566,7 +566,7 @@ int main(int argc, char** argv) {
         float daccuracy = float(dnum_correct) / dnum_instances;
         if (daccuracy > best) {
           best = daccuracy;
-          ofstream out(smodel + to_string(i));
+          ofstream out(smodel + to_string(k));
           boost::archive::text_oarchive oa(out);
           oa << model;
         }
