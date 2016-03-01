@@ -462,24 +462,25 @@ int main(int argc, char** argv) {
 
   // Shuffles instances with gold data
   vector<unsigned> order(25208);
-  for (int i = 0; i < order.size(); ++i) order[i] = i;
-  shuffle(order.begin(), order.end(), *rndeng);
-
-  // Picks subsets of the gold data to be training and dev sets
-  vector<unsigned> training(order.begin(), order.end() - 1000);
-  vector<unsigned> dev(order.end() - 1000, order.end());  
-
-  vector<unsigned> training_order(training.size());
-  for (int i = 0; i < training_order.size(); ++i) training_order[i] = i;
-
-  bool first = true;
-  unsigned report = 0;
-  unsigned report_every_i = 20;
-  unsigned dev_every_i_reports = 20;
-  unsigned lines = 0;
-  unsigned si = training_order.size();
-  double best = 0;
   for (int i = 0; i < 16; ++i) {
+    
+    for (int i = 0; i < order.size(); ++i) order[i] = i;
+    shuffle(order.begin(), order.end(), *rndeng);
+
+    // Picks subsets of the gold data to be training and dev sets
+    vector<unsigned> training(order.begin(), order.end() - 1000);
+    vector<unsigned> dev(order.end() - 1000, order.end());  
+
+    vector<unsigned> training_order(training.size());
+    for (int i = 0; i < training_order.size(); ++i) training_order[i] = i;
+
+    bool first = true;
+    unsigned report = 0;
+    unsigned report_every_i = 20;
+    unsigned dev_every_i_reports = 20;
+    unsigned lines = 0;
+    unsigned si = training_order.size();
+    double best = 0;
     int epoch_count = 0;
     while (epoch_count < 120) {
       double loss = 0;
