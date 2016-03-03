@@ -3,5 +3,5 @@ name:
    first: Daniel
    last: Clothiaux
 email: dclothia@andrew.cmu.edu
-leaderboard: THE Austin Matthews
+leaderboard: Austin Matthews
 languages: [eng,jpn, cmn]
